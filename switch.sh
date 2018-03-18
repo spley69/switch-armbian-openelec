@@ -1,59 +1,105 @@
 #!/bin/bash
 
+# Global config
+declare -A config
+config=(
+    ["nodm_configLocation"]="/xxx/xx/sas"
+    ["armbian_maliDriverLocation"]="mali"
+    ["armbian_umpDriverLocation"]="ump"
+    ["openelec_maliDriverLocation"]="mali"
+    ["openelec_umpDriverLocation"]="ump"
+    )
+
+#h3disp id resulution = openelec profile
+declare -A resolutionConfig
+resolutionConfig=(
+    ["10"]="0"
+    ["32"]="1"
+    )
+
 Main() {
     export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-    # if [ $# -eq 0 ]; then
-    #     DisplayHelp ; exit 0
-    # else
-    #     echo "$@"
-    # fi
+    local system=$1
+    local videoMode=$2
 
-    case $@ in
-        1|armbian1080) # Armbian 1080p
+    if [ ! ${system} ] || [ ! ${videoMode} ]; then
+        echo "No parameters\n"
+        DisplayHelp
+        exit -1
+    fi
+
+#TODO: check config locations of files
+
+    # switch armbian/openelec
+    case ${system} in
+        1|armbian) # Armbian
             SetArmbian
-            SetResolution "1080p"
             ;;
-        2|armbian600) # Armbian 800x600
-            SetArmbian
-            SetResolution "800x600"
-            ;;
-        3|openelec1080) # kodi 1080p
+        2|openelec) # Openelec - kodi
             SetOpenelec
-            SetResolution "1080p"
-            SetOpenelecProfile
-            ;;
-        4|openelec600) # kodi 800x600
-            SetOpenelec
-            SetResolution "800x600"
-            SetOpenelecProfile
             ;;
         *) # help
             DisplayHelp
             ;;
     esac
+
+    (SetResolution ${videoMode}) || exit $?
+
     }
+
+GetOpenelecProfile() {
+    local videoMode=$1
+
+    for mode in "${!resolutionConfig[@]}"; do
+        # echo "${videoMode} MODE: ${mode}, PRO: ${resolutionConfig[$mode]}"
+        if [ ${mode} == ${videoMode} ]; then
+            echo ${resolutionConfig[$mode]}
+            break
+        fi
+    done
+}
+
+SetNondm() {
+    # Set config for nondm start
+    local enable=$1
+
+    if [ ${enable} == 0 ]; then
+        echo "nondm disable"
+    else
+        echo "nondm enable"
+    fi
+}
 
 SetArmbian() {
     echo "setArmbian";
+
+    (SetNondm 1) || exit $?
     }
 
 SetOpenelec() {
     echo "setOpenelec";
+
+    (SetOpenelecProfile ${videoMode}) || exit $?
+
+    (SetNondm 0) || exit $?
     }
 
-# $1 -ressolution to set
 SetResolution() {
     echo "ChangeResolution: $1";
 }
 
 SetOpenelecProfile() {
-    echo "setopenelecProfile";
+    local videoMode=$1
+
+    local OpenelecProfile=$(GetOpenelecProfile ${videoMode})
+    if [ ! ${OpenelecProfile} ]; then
+        echo "error: no config for id resolution: ${videoMode}"
+        return -1
+    fi
 }
 
 DisplayHelp() {
-
     echo ""HELP
 }
-
 Main "$@"
