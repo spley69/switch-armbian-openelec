@@ -4,59 +4,62 @@
 declare -A config
 config=(
     ["nodm_configLocation"]="/xxx/xx/sas"
-    ["armbian_maliDriverLocation"]="mali"
+    ["armbian_maliDriverLocation"]="/lib/modules/$(uname -r)/driver/gpu/mali/mali_armbian.ko"
     ["armbian_umpDriverLocation"]="ump"
-    ["openelec_maliDriverLocation"]="mali"
-    ["openelec_umpDriverLocation"]="ump"
-    )
-
-#h3disp id resulution = openelec profile
-declare -A resolutionConfig
-resolutionConfig=(
-    ["10"]="0"
-    ["32"]="1"
+    ["kodi_maliDriverLocation"]="mali"
+    ["kodi_umpDriverLocation"]="ump"
     )
 
 Main() {
     export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-    local system=$1
-    local videoMode=$2
+    ParseOptions "$@"
 
-    if [ ! ${system} ] || [ ! ${videoMode} ]; then
+#TODO: check config locations of files
+
+    if [ ! ${system} ]; then
         echo "No parameters\n"
         DisplayHelp
         exit -1
     fi
 
-#TODO: check config locations of files
-
-    # switch armbian/openelec
+    # switch armbian/kodi
     case ${system} in
         1|armbian) # Armbian
             SetArmbian
             ;;
-        2|openelec) # Openelec - kodi
-            SetOpenelec
+        2|kodi) # Kodi - kodi
+            SetKodi ${kodiProfile}
             ;;
         *) # help
+            echo "Error: option \"-system\" Wrong value: \"${system}\""
             DisplayHelp
             ;;
     esac
 
-    (SetResolution ${videoMode}) || exit $?
-
+    (SetResolution ${videoMode} ${fbMode}) || exit $?
     }
 
-GetOpenelecProfile() {
-    local videoMode=$1
-
-    for mode in "${!resolutionConfig[@]}"; do
-        # echo "${videoMode} MODE: ${mode}, PRO: ${resolutionConfig[$mode]}"
-        if [ ${mode} == ${videoMode} ]; then
-            echo ${resolutionConfig[$mode]}
-            break
-        fi
+ParseOptions() {
+    while getopts 's:k:v:f:' option ; do
+    case ${option} in
+        s)
+            # System to set armbian/openelec
+            export system=${OPTARG}
+            ;;
+        k)
+            # Kodi profile id to set
+            export kodiProfile=${OPTARG}
+            ;;
+        v)
+            # Video mode to set [see: h3disp -m option]
+            export videoMode=${OPTARG}
+            ;;
+        f)
+            # Frame buffer config to set [see: h3disp -f option]
+            export fbMode=${OPTARG}
+            ;;
+    esac
     done
 }
 
@@ -77,26 +80,24 @@ SetArmbian() {
     (SetNondm 1) || exit $?
     }
 
-SetOpenelec() {
-    echo "setOpenelec";
+SetKodi() {
+    echo "setKodi";
+    local kodiProfile=$1
 
-    (SetOpenelecProfile ${videoMode}) || exit $?
+    (SetKodiProfile ${kodiProfile}) || exit $?
 
     (SetNondm 0) || exit $?
     }
 
 SetResolution() {
-    echo "ChangeResolution: $1";
+    local videoMode=$1
+    local fbMode=$2
+    echo "SetResolution: ${videoMode} fbmode: ${fbMode}";
 }
 
-SetOpenelecProfile() {
-    local videoMode=$1
-
-    local OpenelecProfile=$(GetOpenelecProfile ${videoMode})
-    if [ ! ${OpenelecProfile} ]; then
-        echo "error: no config for id resolution: ${videoMode}"
-        return -1
-    fi
+SetKodiProfile() {
+    local kodiProfile=$1
+    echo "SetKodiProfile: ${kodiProfile}"
 }
 
 DisplayHelp() {
