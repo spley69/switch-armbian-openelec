@@ -3,11 +3,14 @@
 # Global config
 declare -A config
 config=(
-    ["nodm_configLocation"]="/xxx/xx/sas"
-    ["armbian_maliDriverLocation"]="/lib/modules/$(uname -r)/driver/gpu/mali/mali_armbian.ko"
-    ["armbian_umpDriverLocation"]="ump"
-    ["kodi_maliDriverLocation"]="mali"
-    ["kodi_umpDriverLocation"]="ump"
+    ["nodm_configLocation"]="/etc/default/nodm" #NODM_ENABLED=false|true
+    ["armbian_maliDriverLocation"]="/lib/modules/$(uname -r)/kernel/drivers/gpu/mali/mali/mali_armbian.ko"
+    ["armbian_umpDriverLocation"]="/lib/modules/$(uname -r)/kernel/drivers/gpu/mali/ump/ump_armbian.ko"
+    ["kodi_maliDriverLocation"]="/lib/modules/$(uname -r)/kernel/drivers/gpu/mali/mali/mali_openelec.ko"
+    ["kodi_umpDriverLocation"]="/lib/modules/$(uname -r)/kernel/drivers/gpu/mali/ump/ump_armbian.ko"
+    ["system_maliDriverLocation"]="/lib/modules/$(uname -r)/kernel/drivers/gpu/mali/mali/mali.ko"
+    ["system_umpDriverLocation"]="/lib/modules/$(uname -r)/kernel/drivers/gpu/mali/ump/ump.ko"
+    ["kodi_profileConfigLocation"]="/storage/.kodi/userdata/profiles.xml"
     )
 
 Main() {
@@ -37,11 +40,10 @@ Main() {
             ;;
     esac
 
-    (SetResolution ${videoMode} ${fbMode}) || exit $?
     }
 
 ParseOptions() {
-    while getopts 's:k:v:f:' option ; do
+    while getopts 's:k:' option ; do
     case ${option} in
         s)
             # System to set armbian/openelec
@@ -50,14 +52,6 @@ ParseOptions() {
         k)
             # Kodi profile id to set
             export kodiProfile=${OPTARG}
-            ;;
-        v)
-            # Video mode to set [see: h3disp -m option]
-            export videoMode=${OPTARG}
-            ;;
-        f)
-            # Frame buffer config to set [see: h3disp -f option]
-            export fbMode=${OPTARG}
             ;;
     esac
     done
@@ -77,6 +71,8 @@ SetNondm() {
 SetArmbian() {
     echo "setArmbian";
 
+    LinkDrivers ${config[armbian_maliDriverLocation]} ${config[armbian_umpDriverLocation]} || exit $?
+
     (SetNondm 1) || exit $?
     }
 
@@ -84,20 +80,35 @@ SetKodi() {
     echo "setKodi";
     local kodiProfile=$1
 
-    (SetKodiProfile ${kodiProfile}) || exit $?
+    LinkDrivers ${config[kodi_maliDriverLocation]} ${config[kodi_umpDriverLocation]} || exit $?
+
+    if [ ${kodiProfile} ]; then
+        (SetKodiProfile ${kodiProfile}) || exit $?
+    fi
 
     (SetNondm 0) || exit $?
     }
 
-SetResolution() {
-    local videoMode=$1
-    local fbMode=$2
-    echo "SetResolution: ${videoMode} fbmode: ${fbMode}";
-}
-
 SetKodiProfile() {
     local kodiProfile=$1
-    echo "SetKodiProfile: ${kodiProfile}"
+    echo "Set kodi profile: ${kodiProfile} in file ${config["kodi_profileConfigLocation"]}"
+
+    xmlstarlet ed -u "/profiles/lastloaded" -v 0 ${config["kodi_profileConfigLocation"]} || exit $?
+}
+
+LinkDrivers(){
+    local maliDriver=$1
+    local umpDriver=$2
+
+    echo "driver link:"
+    echo "mali: ${maliDriver} -> ${config[system_maliDriverLocation]}"
+    echo "ump: ${umpDriver} -> ${config[system_umpDriverLocation]}"
+
+    rm ${config[system_maliDriverLocation]} || exit $?
+    ln -s ${maliDriver} ${config[system_maliDriverLocation]} || exit $?
+
+    rm ${config[system_umpDriverLocation]} || exit $?
+    ln -s ${umpDriver} ${config[system_umpDriverLocation]} || exit $?
 }
 
 DisplayHelp() {
