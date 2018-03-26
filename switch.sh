@@ -3,11 +3,11 @@
 # Global config
 declare -A config
 config=(
-    ["nodm_configLocation"]="/etc/default/nodm" #NODM_ENABLED=false|true
+    ["nodm_configLocation"]="/etc/default/nodm"
     ["armbian_maliDriverLocation"]="/lib/modules/$(uname -r)/kernel/drivers/gpu/mali/mali/mali_armbian.ko"
     ["armbian_umpDriverLocation"]="/lib/modules/$(uname -r)/kernel/drivers/gpu/mali/ump/ump_armbian.ko"
     ["kodi_maliDriverLocation"]="/lib/modules/$(uname -r)/kernel/drivers/gpu/mali/mali/mali_openelec.ko"
-    ["kodi_umpDriverLocation"]="/lib/modules/$(uname -r)/kernel/drivers/gpu/mali/ump/ump_armbian.ko"
+    ["kodi_umpDriverLocation"]="/lib/modules/$(uname -r)/kernel/drivers/gpu/mali/ump/ump_openelec.ko"
     ["system_maliDriverLocation"]="/lib/modules/$(uname -r)/kernel/drivers/gpu/mali/mali/mali.ko"
     ["system_umpDriverLocation"]="/lib/modules/$(uname -r)/kernel/drivers/gpu/mali/ump/ump.ko"
     ["kodi_profileConfigLocation"]="/storage/.kodi/userdata/profiles.xml"
@@ -39,7 +39,6 @@ Main() {
             DisplayHelp
             ;;
     esac
-
     }
 
 ParseOptions() {
@@ -58,14 +57,17 @@ ParseOptions() {
 }
 
 SetNondm() {
-    # Set config for nondm start
     local enable=$1
+    local configLocation=$2
 
-    if [ ${enable} == 0 ]; then
-        echo "nondm disable"
+    if ${enable}; then
+        enable='true'
     else
-        echo "nondm enable"
+        enable='false'
     fi
+
+    echo "Set nondm enable: ${enable} in file: ${configLocation}"
+    sed -i -E 's/(NODM_ENABLED\s?=\s?).+/\1'${enable}'/' ${configLocation}
 }
 
 SetArmbian() {
@@ -73,7 +75,7 @@ SetArmbian() {
 
     LinkDrivers ${config[armbian_maliDriverLocation]} ${config[armbian_umpDriverLocation]} || exit $?
 
-    (SetNondm 1) || exit $?
+    (SetNondm true ${config[nodm_configLocation]}) || exit $?
     }
 
 SetKodi() {
@@ -86,14 +88,16 @@ SetKodi() {
         (SetKodiProfile ${kodiProfile}) || exit $?
     fi
 
-    (SetNondm 0) || exit $?
+    (SetNondm false ${config[nodm_configLocation]}) || exit $?
     }
 
 SetKodiProfile() {
     local kodiProfile=$1
+
     echo "Set kodi profile: ${kodiProfile} in file ${config["kodi_profileConfigLocation"]}"
 
-    xmlstarlet ed -u "/profiles/lastloaded" -v 0 ${config["kodi_profileConfigLocation"]} || exit $?
+# TODOO: ADD error replace message
+    xmlstarlet ed --inplace -u "/profiles/lastloaded" -v ${kodiProfile} ${config["kodi_profileConfigLocation"]} || exit $?
 }
 
 LinkDrivers(){
